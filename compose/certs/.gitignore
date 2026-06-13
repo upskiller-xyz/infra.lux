@@ -1,0 +1,3 @@
+# Never commit TLS material. Keep the directory, ignore its contents.
+*
+!.gitignore

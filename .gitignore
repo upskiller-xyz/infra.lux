@@ -1,0 +1,12 @@
+# Riktiga env-filer (mallarna *.example committas, ifyllda värden aldrig)
+# OBS: images.env och modal/model_gpu/model.env är release-MANIFEST (pinnade
+# versioner, inga secrets) och committas medvetet.
+envs/*.env
+!envs/*.env.example
+
+# TLS-material och certs hanteras per katalog (compose/certs/.gitignore)
+*.pem
+*.key
+
+# OS / editor
+.DS_Store

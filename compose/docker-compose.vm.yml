@@ -1,0 +1,205 @@
+# Topologi A (VM) — CPU-tjänster på en Scaleway Instance, GPU-inferens på Modal.
+#
+# Topology:
+#   internet ──▶ nginx (enda publicerade tjänsten: 80/443)
+#                  └─▶ server-lux ──▶ encoder / obstruction / merger / stats   (endast internt nät)
+#                                 └─▶ MODEL_SERVICE_URL ──▶ Modal (GPU, off-box)
+#
+# Skillnad mot gamla server_lux/deployment: bilder PULLAS via tagg (images.env),
+# byggs inte på instansen. Endast nginx binder host-portar; apparna når bara
+# varandra på det interna `lux-network`.
+#
+# Kör via compose/deploy-vm.sh (gör docker login + pull + up med båda env-filerna):
+#   docker compose -f docker-compose.vm.yml \
+#     --env-file ../images.env --env-file ../envs/vm.env pull
+#   docker compose ... up -d
+
+services:
+  # ── Publik gateway: enda tjänsten med publicerade portar ────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: lux-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Cloudflare Origin Certificate (origin.pem + origin.key). Se setup-cloudflare.sh.
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      server-lux:
+        condition: service_healthy
+    networks:
+      - lux-network
+
+  # ── Orkestrator: internt, nås via nginx ─────────────────────────────────────
+  server-lux:
+    image: ${REGISTRY}/${NAMESPACE}/server-lux:${LUX_TAG}
+    container_name: server-lux
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+    environment:
+      - PORT=8080
+      - DEPLOYMENT_MODE=production
+      - WORKERS=${LUX_WORKERS:-2}
+      - THREADS=${LUX_THREADS:-8}
+      - FLASK_ENV=production
+      - FLASK_DEBUG=False
+      - ENCODER_SERVICE_URL=http://encoder-service:8082
+      - OBSTRUCTION_SERVICE_URL=http://obstruction-service:8081
+      - MERGER_SERVICE_URL=http://merger-service:8084
+      - STATS_SERVICE_URL=http://stats-service:8085
+      # Inferens på Modal — *.modal.run auto-detekteras och får proxy-auth.
+      - MODEL_SERVICE_URL=${MODEL_SERVICE_URL}
+      - MODAL_KEY=${MODAL_KEY}
+      - MODAL_SECRET=${MODAL_SECRET}
+      - AUTH_TYPE=${AUTH_TYPE:-auth0}
+      - API_TOKEN=${API_TOKEN:-}
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN:-}
+      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-}
+      - AUTH0_ALGORITHMS=${AUTH0_ALGORITHMS:-RS256}
+    env_file:
+      - ../envs/vm.env
+    depends_on:
+      obstruction-service:
+        condition: service_healthy
+      encoder-service:
+        condition: service_healthy
+      merger-service:
+        condition: service_healthy
+      stats-service:
+        condition: service_healthy
+    networks:
+      - lux-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "${LUX_CPUS:-2}"
+          memory: ${LUX_MEM:-2g}
+
+  # ── Obstruction: tyngsta CPU-tjänsten (64 riktningar per fönster, vektoriserat) ─
+  obstruction-service:
+    image: ${REGISTRY}/${NAMESPACE}/server-obstruction:${OBSTRUCTION_TAG}
+    container_name: obstruction-service
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+    environment:
+      - PORT=8081
+      - WORKERS=${OBSTRUCTION_WORKERS:-4}
+      - THREADS=${OBSTRUCTION_THREADS:-2}
+      - FLASK_ENV=production
+    networks:
+      - lux-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "${OBSTRUCTION_CPUS:-4}"
+          memory: ${OBSTRUCTION_MEM:-4g}
+
+  # ── Encoder: CPU-rasterisering ──────────────────────────────────────────────
+  encoder-service:
+    image: ${REGISTRY}/${NAMESPACE}/server-encoder:${ENCODER_TAG}
+    container_name: encoder-service
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+    environment:
+      - PORT=8082
+      - WORKERS=${ENCODER_WORKERS:-2}
+      - THREADS=${ENCODER_THREADS:-4}
+      - FLASK_ENV=production
+    networks:
+      - lux-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "${ENCODER_CPUS:-2}"
+          memory: ${ENCODER_MEM:-2g}
+
+  # ── Merger ──────────────────────────────────────────────────────────────────
+  merger-service:
+    image: ${REGISTRY}/${NAMESPACE}/server-merger:${MERGER_TAG}
+    container_name: merger-service
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+    environment:
+      - PORT=8084
+      - WORKERS=${MERGER_WORKERS:-2}
+      - THREADS=${MERGER_THREADS:-4}
+      - FLASK_ENV=production
+    networks:
+      - lux-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "${MERGER_CPUS:-1}"
+          memory: ${MERGER_MEM:-1g}
+
+  # ── Stats ─────────────────────────────────────────────────────────────────
+  stats-service:
+    image: ${REGISTRY}/${NAMESPACE}/server-stats:${STATS_TAG}
+    container_name: stats-service
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+    environment:
+      - PORT=8085
+      - WORKERS=${STATS_WORKERS:-1}
+      - THREADS=${STATS_THREADS:-4}
+      - FLASK_ENV=production
+    networks:
+      - lux-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "${STATS_CPUS:-1}"
+          memory: ${STATS_MEM:-1g}
+
+  # ── Starta om ohälsosamma containrar automatiskt ────────────────────────────
+  autoheal:
+    image: willfarrell/autoheal
+    container_name: autoheal
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_START_PERIOD=120
+
+networks:
+  lux-network:
+    driver: bridge
