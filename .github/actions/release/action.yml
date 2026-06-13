@@ -35,7 +35,12 @@ runs:
     - name: Resolve registry config from infra.lux/images.env
       shell: bash
       run: |
-        set -a; source "${{ github.action_path }}/../../../images.env"; set +a
+        set -euo pipefail
+        manifest="${{ github.action_path }}/../../../images.env"
+        [[ -f "$manifest" ]] || { echo "::error::images.env not found at $manifest"; exit 1; }
+        set -a; source "$manifest"; set +a
+        : "${REGISTRY:?REGISTRY not set in images.env}"
+        : "${NAMESPACE:?NAMESPACE not set in images.env}"
         echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
         echo "NAMESPACE=${NAMESPACE}" >> "$GITHUB_ENV"
 

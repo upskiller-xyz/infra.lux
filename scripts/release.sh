@@ -13,7 +13,7 @@
 # Env:
 #   IMAGE        required   image name, e.g. server-encoder
 #   REGISTRY     rg.fr-par.scw.cloud      registry host
-#   NAMESPACE    upskiller                registry namespace
+#   NAMESPACE    lux-nsp                  registry namespace
 #   PLATFORM     linux/amd64              build platform (Modal/Scaleway are amd64)
 #   DOCKERFILE   Dockerfile               path to the Dockerfile
 #   CONTEXT      .                        build context
