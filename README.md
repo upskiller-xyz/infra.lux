@@ -77,8 +77,8 @@ Release = ändra en tagg i manifestet, pulla/redeploy. Rollback = sätt tillbaka
 ## Rollout
 
 1. ✅ Initiera infra.lux: konventioner (detta dokument) + skelett.
-2. ⬜ `scripts/release.sh` + reusable workflow — pilot på `server_encoder`, verifiera taggar i registret.
-3. ✅ GPU-deploy som fristående enhet — kontrakt + wrapper i [modal/model_gpu](modal/model_gpu/) (källkod bor i `server_model`).
+2. ✅ `scripts/release.sh` + composite action — utrullad i alla sex repon (SHA-pinnad), bevisad på `server_encoder` (image i `lux-nsp`).
+3. ✅ GPU-deploy som fristående enhet — kontrakt + wrapper i [modal/model_gpu](modal/model_gpu/) (källkod bor i `server_model`). **Verifierad skarpt 2026-06-13**: `deploy.sh` re-deployar (cachad image), endpoint uppe, proxy-auth påtvingad (401/200), `/status` OK.
 4. ✅ VM-deploy → pull (topologi A) i [compose/](compose/), inkl. cloudflare/nginx/fail2ban. Migrerat från `server_lux/deployment/`.
 5. ⬜ Modal CPU-pipeline (topologi C) + mätscript → perf/kostnads-test (p50/p95, cold-start, €/1000 req).
 6. ⬜ Scaleway serverless (topologi B) + dygns-cron för `min-scale`.
