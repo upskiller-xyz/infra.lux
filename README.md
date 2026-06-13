@@ -80,8 +80,8 @@ Release = ändra en tagg i manifestet, pulla/redeploy. Rollback = sätt tillbaka
 2. ✅ `scripts/release.sh` + composite action — utrullad i alla sex repon (SHA-pinnad), bevisad på `server_encoder` (image i `lux-nsp`).
 3. ✅ GPU-deploy som fristående enhet — kontrakt + wrapper i [modal/model_gpu](modal/model_gpu/) (källkod bor i `server_model`). **Verifierad skarpt 2026-06-13**: `deploy.sh` re-deployar (cachad image), endpoint uppe, proxy-auth påtvingad (401/200), `/status` OK.
 4. ✅ VM-deploy → pull (topologi A) i [compose/](compose/), inkl. cloudflare/nginx/fail2ban. Migrerat från `server_lux/deployment/`.
-5. ⬜ Modal CPU-pipeline (topologi C) + mätscript → perf/kostnads-test (p50/p95, cold-start, €/1000 req).
-6. ⬜ Scaleway serverless (topologi B) + dygns-cron för `min-scale`.
+5. 🟡 Modal CPU-pipeline (topologi C) — byggd + deployad ([cpu_pipeline](modal/cpu_pipeline/)), cold start 8.4s / warm p50 0.56s. Kvar: mäta riktiga pipelinen (`/v1/run`).
+6. 🟡 Scaleway serverless (topologi B) — artefakter klara i [scaleway/](scaleway/) (combined-image Dockerfile, deploy-serverless.sh, scale-cron + GH-workflow). Kvar: bygg/push image + deploy (kräver scw-/registry-creds).
 
 ## Migration ut ur server_lux
 
