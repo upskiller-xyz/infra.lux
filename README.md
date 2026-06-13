@@ -65,7 +65,9 @@ Registry: `rg.fr-par.scw.cloud/<namespace>/<image>`
 
 Vad som körs var styrs av **två** manifest, inte av källkod:
 
-- [images.env](images.env) — CPU-tjänsternas taggar (`ENCODER_TAG=1.2.0`, …). Konsumeras av topologi A/B.
+- [images.env](images.env) — registry + namespace + CPU-tjänsternas taggar (`ENCODER_TAG=1.2.0`, …).
+  **Enda källan** för `REGISTRY`/`NAMESPACE`: läses av både CI (release-actionen `source`:ar den)
+  och `deploy-vm.sh` på VM:en. Byt namespace/registry/zon → en edit här, inga GitHub-variabler.
 - [modal/model_gpu/model.env](modal/model_gpu/model.env) — GPU:ns egen livscykel (`MODEL_REF`, GPU-typ, skalning). Konsumeras av GPU-deployen.
 
 Release = ändra en tagg i manifestet, pulla/redeploy. Rollback = sätt tillbaka taggen.
