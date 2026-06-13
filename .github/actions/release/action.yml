@@ -20,7 +20,7 @@ inputs:
   namespace:
     description: "Registry namespace"
     required: false
-    default: "upskiller"
+    default: "lux-nsp"
   scw-registry-user:
     description: "Registry login user"
     required: false

@@ -23,7 +23,7 @@
 set -euo pipefail
 
 REGISTRY="${REGISTRY:-rg.fr-par.scw.cloud}"
-NAMESPACE="${NAMESPACE:-upskiller}"
+NAMESPACE="${NAMESPACE:-lux-nsp}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 DOCKERFILE="${DOCKERFILE:-Dockerfile}"
 CONTEXT="${CONTEXT:-.}"
