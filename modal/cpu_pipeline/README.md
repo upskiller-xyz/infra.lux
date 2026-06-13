@@ -41,5 +41,15 @@ och uppskattad kostnad). Byggs tillsammans med appen.
 
 ## Status
 
-⬜ Ej byggt. Väntar på bekräftelse av upplägg (2 rekommenderas) innan app.py +
-measure.py skrivs.
+✅ **Byggd + deployad** (upplägg 2). `app.py` + `supervisord.conf` +
+`requirements.txt` + `measure.py`. Endpoint:
+`https://stasya00--upskiller-cpu-pipeline-serve.modal.run`.
+
+Första mätning (2026-06-13, `/apispec.json` = endast gateway):
+- **Cold start: 8.4s** (5 gunicorns; scale-to-zero)
+- **Warm: p50 0.56s / p95 0.72s**
+- ~$0.037 / 1000 req (CPU, exkl. GPU)
+
+⬜ Kvar: mäta den **riktiga pipelinen** (`/v1/run` med bild-payload genom
+encoder→model→merger→obstruction→stats) — den meningsfulla perf/kostnads-siffran.
+Kräver giltig request + GPU-anrop. Kör `measure.py --path /v1/run --file <bild> --model <namn>`.
