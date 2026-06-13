@@ -13,7 +13,7 @@
 # Env:
 #   IMAGE        required   image name, e.g. server-encoder
 #   REGISTRY     rg.fr-par.scw.cloud      registry host
-#   NAMESPACE    upskiller                registry namespace
+#   NAMESPACE    lux-nsp                  registry namespace
 #   PLATFORM     linux/amd64              build platform (Modal/Scaleway are amd64)
 #   DOCKERFILE   Dockerfile               path to the Dockerfile
 #   CONTEXT      .                        build context
@@ -23,7 +23,7 @@
 set -euo pipefail
 
 REGISTRY="${REGISTRY:-rg.fr-par.scw.cloud}"
-NAMESPACE="${NAMESPACE:-upskiller}"
+NAMESPACE="${NAMESPACE:-lux-nsp}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 DOCKERFILE="${DOCKERFILE:-Dockerfile}"
 CONTEXT="${CONTEXT:-.}"
@@ -42,13 +42,16 @@ done
 REPO="${REGISTRY}/${NAMESPACE}/${IMAGE}"
 SHA="$(git rev-parse --short HEAD)"
 
-# ── Derive context (CI sets GITHUB_REF; fall back to local git state) ─────────
+# ── Derive context (CI sets GITHUB_*; fall back to local git state) ───────────
+# event:       workflow_dispatch / push / "" locally — forces the dispatch path
 # ref_tag:     refs/tags/v1.2.0 in CI, or `git describe --exact-match` locally
 # branch:      current branch name
+event="${GITHUB_EVENT_NAME:-}"
 ref_tag=""
 branch=""
 if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
   ref_tag="${GITHUB_REF#refs/tags/}"
+  branch="${GITHUB_REF_NAME:-}"
 elif [[ -n "${GITHUB_REF_NAME:-}" ]]; then
   branch="${GITHUB_REF_NAME}"
 else
@@ -59,16 +62,21 @@ fi
 sanitize() { echo "$1" | tr '/' '-' | tr -cd '[:alnum:]._-'; }
 
 declare -a TAGS=()
-if [[ -n "$ref_tag" ]]; then
+if [[ "$event" == "workflow_dispatch" ]]; then
+  # Manual build: branch-sha, never latest/edge (even when dispatched on master).
+  TAGS+=("$(sanitize "${branch:-detached}")-${SHA}")
+  [[ -n "$POSTFIX" ]] && TAGS+=("$(sanitize "$POSTFIX")")
+elif [[ -n "$ref_tag" ]]; then
   # Release: strip a leading 'v'. Immutable semver + moving latest.
   semver="${ref_tag#v}"
   TAGS+=("$semver" "latest")
 elif [[ "$branch" == "master" || "$branch" == "main" ]]; then
   # Master tip: git describe gives 1.2.0-5-g<sha> (or just <sha> with no tags yet).
+  # Strip a leading 'v' so it matches release tags (1.2.0, not v1.2.0).
   described="$(git describe --tags --always 2>/dev/null || echo "$SHA")"
-  TAGS+=("$(sanitize "$described")" "edge")
+  TAGS+=("$(sanitize "${described#v}")" "edge")
 else
-  # Dispatch / feature branch: branch-sha, never latest/edge.
+  # Feature branch (local or push): branch-sha, never latest/edge.
   TAGS+=("$(sanitize "${branch:-detached}")-${SHA}")
   [[ -n "$POSTFIX" ]] && TAGS+=("$(sanitize "$POSTFIX")")
 fi

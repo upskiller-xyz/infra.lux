@@ -1,0 +1,67 @@
+name: "Build & push image (release.sh)"
+description: >
+  Build the calling repo's Dockerfile and push tagged images to the Scaleway
+  registry using infra.lux/scripts/release.sh. Registry host + namespace are read
+  from infra.lux/images.env (the single source of truth, shared with deploy-vm.sh),
+  so changing them is a one-file edit. Tag scheme: see infra.lux/README.md.
+  The calling workflow must check itself out with fetch-depth: 0 (release.sh needs
+  full history + tags for `git describe`).
+
+inputs:
+  image:
+    description: "Image name, e.g. server-encoder"
+    required: true
+  postfix:
+    description: "Extra immutable tag (workflow_dispatch builds only)"
+    required: false
+    default: ""
+  scw-registry-user:
+    description: "Registry login user (any value works for Scaleway; password is the secret key)"
+    required: false
+    default: "nologin"
+  scw-secret-key:
+    description: "Scaleway secret key for registry login + push"
+    required: true
+  platform:
+    description: "Build platform"
+    required: false
+    default: "linux/amd64"
+
+runs:
+  using: composite
+  steps:
+    # REGISTRY + NAMESPACE come from images.env — one place, version-controlled,
+    # and the same file deploy-vm.sh reads on the VM (no drift between CI & deploy).
+    - name: Resolve registry config from infra.lux/images.env
+      shell: bash
+      run: |
+        set -euo pipefail
+        manifest="${{ github.action_path }}/../../../images.env"
+        [[ -f "$manifest" ]] || { echo "::error::images.env not found at $manifest"; exit 1; }
+        set -a; source "$manifest"; set +a
+        : "${REGISTRY:?REGISTRY not set in images.env}"
+        : "${NAMESPACE:?NAMESPACE not set in images.env}"
+        echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
+        echo "NAMESPACE=${NAMESPACE}" >> "$GITHUB_ENV"
+
+    - name: Set up Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to the Scaleway registry
+      shell: bash
+      run: |
+        echo "${{ inputs.scw-secret-key }}" \
+          | docker login "${REGISTRY}" -u "${{ inputs.scw-registry-user }}" --password-stdin
+
+    - name: Build & push (release.sh)
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        IMAGE: ${{ inputs.image }}
+        # REGISTRY + NAMESPACE inherited from $GITHUB_ENV (sourced from images.env above).
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        args=(--push)
+        [[ -n "${{ inputs.postfix }}" ]] && args+=(--postfix "${{ inputs.postfix }}")
+        # release.sh lives at the infra.lux repo root (action is at .github/actions/release).
+        bash "${{ github.action_path }}/../../../scripts/release.sh" "${args[@]}"
