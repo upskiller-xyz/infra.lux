@@ -11,6 +11,10 @@ inputs:
   image:
     description: "Image name, e.g. server-encoder"
     required: true
+  namespace:
+    description: "Registry namespace override (default: NAMESPACE from images.env)"
+    required: false
+    default: ""
   postfix:
     description: "Extra immutable tag (workflow_dispatch builds only)"
     required: false
@@ -34,6 +38,8 @@ runs:
     # and the same file deploy-vm.sh reads on the VM (no drift between CI & deploy).
     - name: Resolve registry config from infra.lux/images.env
       shell: bash
+      env:
+        INPUT_NAMESPACE: ${{ inputs.namespace }}
       run: |
         set -euo pipefail
         manifest="${{ github.action_path }}/../../../images.env"
@@ -41,8 +47,13 @@ runs:
         set -a; source "$manifest"; set +a
         : "${REGISTRY:?REGISTRY not set in images.env}"
         : "${NAMESPACE:?NAMESPACE not set in images.env}"
-        echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
-        echo "NAMESPACE=${NAMESPACE}" >> "$GITHUB_ENV"
+        if [[ -n "${INPUT_NAMESPACE}" ]]; then
+          [[ "${INPUT_NAMESPACE}" =~ ^[a-zA-Z0-9_-]+$ ]] \
+            || { echo "::error::namespace contains invalid characters: ${INPUT_NAMESPACE}"; exit 1; }
+          NAMESPACE="${INPUT_NAMESPACE}"
+        fi
+        printf 'REGISTRY=%s\n' "${REGISTRY}" >> "$GITHUB_ENV"
+        printf 'NAMESPACE=%s\n' "${NAMESPACE}" >> "$GITHUB_ENV"
 
     - name: Set up Buildx
       uses: docker/setup-buildx-action@v3
