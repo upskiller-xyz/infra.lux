@@ -11,6 +11,10 @@ inputs:
   image:
     description: "Image name, e.g. server-encoder"
     required: true
+  namespace:
+    description: "Registry namespace override (default: NAMESPACE from images.env)"
+    required: false
+    default: ""
   postfix:
     description: "Extra immutable tag (workflow_dispatch builds only)"
     required: false
@@ -41,6 +45,7 @@ runs:
         set -a; source "$manifest"; set +a
         : "${REGISTRY:?REGISTRY not set in images.env}"
         : "${NAMESPACE:?NAMESPACE not set in images.env}"
+        [[ -n "${{ inputs.namespace }}" ]] && NAMESPACE="${{ inputs.namespace }}"
         echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
         echo "NAMESPACE=${NAMESPACE}" >> "$GITHUB_ENV"
 
