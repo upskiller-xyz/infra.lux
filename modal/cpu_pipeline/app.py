@@ -27,7 +27,7 @@ LUX_PORT = 8080
 CPU = 4.0
 MEMORY_MB = 4096
 MIN_CONTAINERS = 0          # scale-to-zero (mät cold start)
-SCALEDOWN_WINDOW = 300
+SCALEDOWN_WINDOW = 60       # snabb scale-to-zero, minimal idle-kostnad
 REQUEST_TIMEOUT = 900
 STARTUP_TIMEOUT = 180       # 5 gunicorn-processer ska hinna boota
 
