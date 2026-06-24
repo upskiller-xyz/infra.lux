@@ -1,0 +1,54 @@
+name: Scale CPU pipeline (day/night)
+
+# Topologi B dygns-skalning: sätter min-scale på Scaleway-serverless-containern.
+# 08:00 CEST → min-scale=1 (varm dagtid), 22:00 CEST → min-scale=0 (scale-to-zero natt).
+#
+# OBS: GitHub cron är i UTC och följer INTE sommartid. Tiderna nedan stämmer för
+# CEST (sommar, UTC+2); under CET (vinter, UTC+1) blir de en timme tidigare.
+# Acceptera ±1h, eller justera cron-raderna vid tidsomställning.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # 08:00 CEST → up
+    - cron: "0 20 * * *"  # 22:00 CEST → down
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "up (min-scale=1) eller down (min-scale=0)"
+        type: choice
+        options: [up, down]
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  scale:
+    runs-on: ubuntu-latest
+    env:
+      SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+      SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
+      SCW_DEFAULT_ORGANIZATION_ID: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
+      SCW_DEFAULT_REGION: fr-par
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Determine action
+        id: act
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 6 * * *")  echo "action=up"   >> "$GITHUB_OUTPUT" ;;
+            "0 20 * * *") echo "action=down" >> "$GITHUB_OUTPUT" ;;
+            *)            echo "action=${{ github.event.inputs.action }}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Install scw + jq
+        run: |
+          curl -fsSL "https://github.com/scaleway/scaleway-cli/releases/latest/download/scaleway-cli_linux_amd64" -o /usr/local/bin/scw
+          chmod +x /usr/local/bin/scw
+          scw version
+          sudo apt-get update -y && sudo apt-get install -y jq
+
+      - name: Scale
+        run: bash scaleway/scale-cron.sh "${{ steps.act.outputs.action }}"
