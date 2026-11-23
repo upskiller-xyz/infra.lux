@@ -6,8 +6,9 @@ set -euo pipefail
 # and adds the current user to the docker group. Idempotent — safe to re-run.
 #
 # After this, log out/in once (for the docker group) and run:
-#   bash setup-cloudflare.sh      # DNS + TLS (once)
+#   bash setup-cloudflare.sh      # tunnel + token
 #   bash deploy-vm.sh --firewall  # pull + up
+#   bash setup-cloudflare.sh      # DNS → tunnel
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 
@@ -51,5 +52,6 @@ docker compose version
 echo ""
 echo "Next:"
 echo "  cp ../envs/vm.env.example ../envs/vm.env && \$EDITOR ../envs/vm.env"
-echo "  bash setup-cloudflare.sh"
-echo "  bash deploy-vm.sh --firewall"
+echo "  bash setup-cloudflare.sh      # tunnel + token"
+echo "  bash deploy-vm.sh --firewall   # pull + up"
+echo "  bash setup-cloudflare.sh      # DNS → tunnel"

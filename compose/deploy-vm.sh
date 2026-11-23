@@ -11,7 +11,7 @@ set -euo pipefail
 #
 # Usage:
 #   bash deploy-vm.sh [--firewall]
-#     --firewall   konfigurera ufw (släpp endast 22/80/443)
+#     --firewall   konfigurera ufw (släpp endast 22 — trafiken kommer via tunneln)
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
@@ -55,11 +55,9 @@ else
   echo -e "${YELLOW}Inference: MODEL_SERVICE_URL is not a *.modal.run URL — no proxy-auth attached.${NC}"
 fi
 
-# ── 1b. TLS: Cloudflare Origin Certificate ────────────────────────────────────
-mkdir -p certs
-if [[ ! -f certs/origin.pem || ! -f certs/origin.key ]]; then
-  echo -e "${RED}Missing TLS cert${NC} (certs/origin.pem + certs/origin.key)."
-  echo "Run setup-cloudflare.sh to auto-issue, or drop the files in manually."
+# ── 1b. Cloudflare Tunnel: enda vägen in ──────────────────────────────────────
+if [[ -z "${TUNNEL_TOKEN:-}" ]]; then
+  echo -e "${RED}TUNNEL_TOKEN is unset${NC} in $RUNTIME_ENV. Run setup-cloudflare.sh first."
   exit 1
 fi
 
@@ -70,10 +68,12 @@ if [[ -n "${SCW_SECRET_KEY:-}" ]]; then
   echo "$SCW_SECRET_KEY" | docker login "${REGISTRY}" -u "${SCW_REGISTRY_USER:-nologin}" --password-stdin
 fi
 
-# ── 3. Optional firewall: expose only SSH + HTTP(S) ──────────────────────────
+# ── 3. Optional firewall: only SSH (no service publishes a host port) ─────────
 if [[ "$SETUP_FIREWALL" == true ]]; then
-  echo -e "${BLUE}Configuring ufw (allow 22/80/443, deny the rest)...${NC}"
-  sudo ufw allow 22/tcp; sudo ufw allow 80/tcp; sudo ufw allow 443/tcp
+  echo -e "${BLUE}Configuring ufw (allow 22, deny the rest)...${NC}"
+  sudo ufw allow 22/tcp
+  sudo ufw delete allow 80/tcp 2>/dev/null || true
+  sudo ufw delete allow 443/tcp 2>/dev/null || true
   sudo ufw --force enable
 fi
 
@@ -84,5 +84,5 @@ echo -e "${BLUE}Pulling images (tags from images.env)...${NC}"
 echo -e "${BLUE}Starting stack...${NC}"
 "${COMPOSE[@]}" up -d
 
-echo -e "${GREEN}Done.${NC} Public entrypoint via nginx (80/443)."
+echo -e "${GREEN}Done.${NC} Public entrypoint via Cloudflare Tunnel (no open ports)."
 "${COMPOSE[@]}" ps
